@@ -28,7 +28,7 @@ void destroyCommandPool(vk::Device &device, vk::CommandPool &commandPool);
 void createTimestampQueryPool(vk::Device &device, vk::QueryPool &queryPool, uint32_t queryCount);
 void destroyQueryPool(vk::Device &device, vk::QueryPool &queryPool);
 
-void createSwapchain(AppResources &app);
+void createSwapchain(AppResources &app, vk::SwapchainKHR oldSwapchain = nullptr);
 
 void printDeviceCapabilities(vk::PhysicalDevice &pDevice);
 

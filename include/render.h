@@ -23,6 +23,7 @@ public:
     bool wp, ap, sp, dp;
     bool doRawMouseInput;
     bool doingRawMouseInput;
+    bool framebufferResized = false;
 
     AppResources &app;
     int framesinlight;
@@ -45,12 +46,17 @@ public:
     ~Render();
 
     static void mouseCallback(GLFWwindow *window, double xpos, double ypos);
+    static void framebufferSizeCallback(GLFWwindow *window, int width, int height);
 
     void preInput();
 
     void input();
 
     void renderSimulationFrame(Simulation &simulation);
+
+    void releaseSwapchainResources();
+    void createSwapchainResources();
+    void recreateSwapchain(Simulation &simulation);
 
     template<typename O, typename T, typename U>
     void renderFrame(O opaque, T transparent, U ui);

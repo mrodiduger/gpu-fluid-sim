@@ -101,17 +101,21 @@ class ImguiUi {
     std::vector<std::string> sceneFiles;
     std::vector<const char *> sceneFilesCStr;// sceneFiles[].c_str()
     int currentSceneFile = 0;
+    uint32_t imageCount = 0;
 
 
     void drawUi(UiBindings &bindings);
     void destroyCommandBuffers();
     void initCommandBuffers();
+    void initVulkanBackend();
 
 public:
     explicit ImguiUi();
     ~ImguiUi();
 
     vk::CommandBuffer updateCommandBuffer(uint32_t index, UiBindings &bindings);
+    void releaseSwapchainResources();
+    void resize();
 
     [[nodiscard]] std::string getSelectedSceneFile() const;
 };

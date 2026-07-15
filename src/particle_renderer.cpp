@@ -1,5 +1,6 @@
 #include "particle_renderer.h"
 #include "helper.h"
+#include "visual_scale.h"
 
 #define STBI_ONLY_HDR
 #include <stb_image.h>
@@ -9,9 +10,8 @@
  * Create a graphics pipeline by using this struct and just overwriting any fields as you need.
  */
 struct GraphicsPipelineBuilder {
-    vk::Viewport viewport;
-    vk::Rect2D scissor;
     vk::PipelineViewportStateCreateInfo viewportSCI;
+    vk::PipelineDynamicStateCreateInfo dynamicStateSCI;
     vk::PipelineRasterizationStateCreateInfo rasterizationSCI;
     vk::PipelineMultisampleStateCreateInfo multisampleSCI;
     vk::PipelineDepthStencilStateCreateInfo depthStencilSCI;
@@ -26,6 +26,7 @@ struct GraphicsPipelineBuilder {
     vk::RenderPass renderPass;
     uint32_t subpass;
     std::vector<vk::ShaderModule> shaderModules;
+    std::vector<vk::DynamicState> dynamicStates;
 
     GraphicsPipelineBuilder(GraphicsPipelineBuilder &&obj) = default;
 
@@ -38,26 +39,14 @@ struct GraphicsPipelineBuilder {
             shaderStageCIs.push_back({{}, stage, sm, "main", nullptr});
         }
 
-        viewport = vk::Viewport {
-                0.f,                             // x start coordinate
-                (float) resources.extent.height, // y start coordinate
-                (float) resources.extent.width,  // Width of viewport
-                -(float) resources.extent.height,// Height of viewport
-                0.f,                             // Min framebuffer depth,
-                1.f                              // Max framebuffer depth
-        };
-        scissor = vk::Rect2D {
-                {0, 0},         // Offset to use region from
-                resources.extent// Extent to describe region to use, starting at offset
-        };
-
         viewportSCI = vk::PipelineViewportStateCreateInfo {
                 {},
-                1,        // Viewport count
-                &viewport,// Viewport used
-                1,        // Scissor count
-                &scissor  // Scissor used
+                1,
+                nullptr,
+                1,
+                nullptr
         };
+        dynamicStates = {vk::DynamicState::eViewport, vk::DynamicState::eScissor};
 
         // Rasterizer
         rasterizationSCI = vk::PipelineRasterizationStateCreateInfo {
@@ -140,6 +129,7 @@ struct GraphicsPipelineBuilder {
     }
 
     vk::GraphicsPipelineCreateInfo buildCreateInfo() {
+        dynamicStateSCI = {{}, dynamicStates};
         if (vertexInputSci.vertexBindingDescriptionCount == 0 || vertexInputSci.pVertexBindingDescriptions == nullptr) {
             vertexInputSci.vertexBindingDescriptionCount = vertexInputBindings.size();
             vertexInputSci.pVertexBindingDescriptions = vertexInputBindings.data();
@@ -167,7 +157,7 @@ struct GraphicsPipelineBuilder {
                 &multisampleSCI,
                 &depthStencilSCI,
                 &colorBlendSCI,
-                nullptr,// dynamic state
+                &dynamicStateSCI,
                 pipelineLayout,
                 renderPass,
                 subpass,
@@ -283,6 +273,7 @@ Texture Texture::createFromImage(const std::string &file) {
     std::vector<float> imageVector;
     imageVector.resize(sx * sy * 4);
     memcpy(imageVector.data(), image, imageVector.size() * sizeof(float));
+    stbi_image_free(image);
 
     Texture r;
     vk::Format imageFormat = vk::Format::eR32G32B32A32Sfloat;
@@ -348,172 +339,48 @@ Texture Texture::createFromImage(const std::string &file) {
     return std::move(r);
 }
 
-ParticleRenderer::ParticleRenderer() : imageSize(resources.extent.width, resources.extent.height, 1) {
+ParticleRenderer::ParticleRenderer() {
     sharedResources = std::make_shared<SharedResources>();
 
-    // color attachment image
-    {
-        vk::ImageCreateInfo imageInfo {
-                {},
-                vk::ImageType::e2D,
-                resources.surfaceFormat.format,
-                imageSize,
-                1,
-                1,
-                vk::SampleCountFlagBits::e1,
-                vk::ImageTiling::eOptimal,
-                {vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc},
-                vk::SharingMode::eExclusive,
-                1,
-                &resources.gQ,
-                vk::ImageLayout::eUndefined};
-
-        createImage(
-                resources.pDevice,
-                resources.device,
-                imageInfo,
-                {vk::MemoryPropertyFlagBits::eDeviceLocal},
-                "render-color-attachment",
-                colorAttachment,
-                colorAttachmentMemory);
-
-        vk::ImageViewCreateInfo viewInfo {
-                {},
-                colorAttachment,
-                vk::ImageViewType::e2D,
-                resources.surfaceFormat.format,
-                {},
-                {{vk::ImageAspectFlagBits::eColor},
-                 0,
-                 1,
-                 0,
-                 1}};
-        colorAttachmentView = resources.device.createImageView(viewInfo);
-
-        constexpr vk::Format depthFormat = vk::Format::eD32Sfloat;
-
-        imageInfo.format = depthFormat;
-        imageInfo.usage = {vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eInputAttachment | vk::ImageUsageFlagBits::eSampled};
-        createImage(
-                resources.pDevice,
-                resources.device,
-                imageInfo,
-                {vk::MemoryPropertyFlagBits::eDeviceLocal},
-                "render-depth-attachment",
-                depthImage,
-                depthImageMemory);
-        viewInfo.image = depthImage;
-        viewInfo.format = imageInfo.format;
-        viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
-        depthImageView = resources.device.createImageView(viewInfo);
-        sharedResources->depthImageView = depthImageView;
-
-        // render pass/framebuffer
-        std::array<vk::AttachmentDescription, 3>
-                attachments {
-                        vk::AttachmentDescription {{},// color attachment
-                                                   resources.surfaceFormat.format,
-                                                   vk::SampleCountFlagBits::e1,
-                                                   vk::AttachmentLoadOp::eClear,
-                                                   vk::AttachmentStoreOp::eStore,
-                                                   vk::AttachmentLoadOp::eDontCare,
-                                                   vk::AttachmentStoreOp::eDontCare,
-                                                   vk::ImageLayout::eUndefined,
-                                                   vk::ImageLayout::eColorAttachmentOptimal},
-                        vk::AttachmentDescription {{},// depth attachment
-                                                   depthFormat,
-                                                   vk::SampleCountFlagBits::e1,
-                                                   vk::AttachmentLoadOp::eClear,
-                                                   vk::AttachmentStoreOp::eStore,
-                                                   vk::AttachmentLoadOp::eDontCare,
-                                                   vk::AttachmentStoreOp::eDontCare,
-                                                   vk::ImageLayout::eUndefined,
-                                                   vk::ImageLayout::eDepthStencilAttachmentOptimal},
-                        vk::AttachmentDescription {{},// depth image as input
-                                                   depthFormat,
-                                                   vk::SampleCountFlagBits::e1,
-                                                   vk::AttachmentLoadOp::eLoad,
-                                                   vk::AttachmentStoreOp::eDontCare,
-                                                   vk::AttachmentLoadOp::eDontCare,
-                                                   vk::AttachmentStoreOp::eDontCare,
-                                                   vk::ImageLayout::eDepthStencilAttachmentOptimal,
-                                                   vk::ImageLayout::eShaderReadOnlyOptimal}};
-
-        std::array<vk::ImageView, 3> attachmentViews {
-                colorAttachmentView, depthImageView, sharedResources->depthImageView};
-
-        vk::AttachmentReference colorAttachmentReference {
-                0, vk::ImageLayout::eColorAttachmentOptimal};
-        vk::AttachmentReference depthAttachmentReference {
-                1, vk::ImageLayout::eDepthStencilAttachmentOptimal};
-        vk::AttachmentReference depthSamplerAttachmentReference {
-                2, vk::ImageLayout::eShaderReadOnlyOptimal};
-
-        vk::SubpassDescription subpasses[] {
-                {// background subpass
-                 {},
-                 vk::PipelineBindPoint::eGraphics,
-                 {},
-                 colorAttachmentReference,
-                 {},
-                 nullptr,
-                 {}},
-                {// particle subpass
-                 {},
-                 vk::PipelineBindPoint::eGraphics,
-                 {},
-                 colorAttachmentReference,
-                 {},
-                 &depthAttachmentReference,
-                 {}},
-                {{},// ray marcher (depends on depth buffer)
-                 vk::PipelineBindPoint::eGraphics,
-                 depthSamplerAttachmentReference,
-                 colorAttachmentReference,
-                 {},
-                 nullptr,
-                 {}}};
-
-        vk::SubpassDependency dependencies[] {
-                {// external dependency
-                 VK_SUBPASS_EXTERNAL,
-                 0,
-                 {vk::PipelineStageFlagBits::eColorAttachmentOutput},
-                 {vk::PipelineStageFlagBits::eColorAttachmentOutput},
-                 {vk::AccessFlagBits::eColorAttachmentWrite},
-                 {vk::AccessFlagBits::eColorAttachmentWrite}},
-                {0,
-                 1,
-                 {vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eEarlyFragmentTests},
-                 {vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eEarlyFragmentTests},
-                 {vk::AccessFlagBits::eColorAttachmentWrite},
-                 {vk::AccessFlagBits::eColorAttachmentWrite | vk::AccessFlagBits::eDepthStencilAttachmentWrite}},
-                {1,
-                 2,
-                 {vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eEarlyFragmentTests},
-                 {vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eEarlyFragmentTests},
-                 {vk::AccessFlagBits::eColorAttachmentWrite | vk::AccessFlagBits::eDepthStencilAttachmentWrite},
-                 {vk::AccessFlagBits::eColorAttachmentWrite}}};
-
-        vk::RenderPassCreateInfo renderPassCI {
-                {},
-                attachments.size(),
-                attachments.data(),
-                3U,
-                subpasses,
-                3U,
-                dependencies};
-
-        renderPass = resources.device.createRenderPass(renderPassCI);
-
-        framebuffer = resources.device.createFramebuffer({{},
-                                                          renderPass,
-                                                          attachmentViews.size(),
-                                                          attachmentViews.data(),
-                                                          imageSize.width,
-                                                          imageSize.height,
-                                                          imageSize.depth});
-    }
+    constexpr vk::Format depthFormat = vk::Format::eD32Sfloat;
+    std::array<vk::AttachmentDescription, 3> attachments {
+            vk::AttachmentDescription {{}, resources.surfaceFormat.format, vk::SampleCountFlagBits::e1,
+                                       vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,
+                                       vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
+                                       vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal},
+            vk::AttachmentDescription {{}, depthFormat, vk::SampleCountFlagBits::e1,
+                                       vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,
+                                       vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
+                                       vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal},
+            vk::AttachmentDescription {{}, depthFormat, vk::SampleCountFlagBits::e1,
+                                       vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eDontCare,
+                                       vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
+                                       vk::ImageLayout::eDepthStencilAttachmentOptimal, vk::ImageLayout::eShaderReadOnlyOptimal}};
+    vk::AttachmentReference colorAttachmentReference {0, vk::ImageLayout::eColorAttachmentOptimal};
+    vk::AttachmentReference depthAttachmentReference {1, vk::ImageLayout::eDepthStencilAttachmentOptimal};
+    vk::AttachmentReference depthSamplerAttachmentReference {2, vk::ImageLayout::eShaderReadOnlyOptimal};
+    vk::SubpassDescription subpasses[] {
+            {{}, vk::PipelineBindPoint::eGraphics, {}, colorAttachmentReference, {}, nullptr, {}},
+            {{}, vk::PipelineBindPoint::eGraphics, {}, colorAttachmentReference, {}, &depthAttachmentReference, {}},
+            {{}, vk::PipelineBindPoint::eGraphics, depthSamplerAttachmentReference, colorAttachmentReference, {}, nullptr, {}}};
+    vk::SubpassDependency dependencies[] {
+            {VK_SUBPASS_EXTERNAL, 0,
+             {vk::PipelineStageFlagBits::eColorAttachmentOutput},
+             {vk::PipelineStageFlagBits::eColorAttachmentOutput},
+             {vk::AccessFlagBits::eColorAttachmentWrite},
+             {vk::AccessFlagBits::eColorAttachmentWrite}},
+            {0, 1,
+             {vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eEarlyFragmentTests},
+             {vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eEarlyFragmentTests},
+             {vk::AccessFlagBits::eColorAttachmentWrite},
+             {vk::AccessFlagBits::eColorAttachmentWrite | vk::AccessFlagBits::eDepthStencilAttachmentWrite}},
+            {1, 2,
+             {vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eEarlyFragmentTests},
+             {vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eEarlyFragmentTests},
+             {vk::AccessFlagBits::eColorAttachmentWrite | vk::AccessFlagBits::eDepthStencilAttachmentWrite},
+             {vk::AccessFlagBits::eColorAttachmentWrite}}};
+    renderPass = resources.device.createRenderPass({{}, attachments, subpasses, dependencies});
+    createFramebufferResources();
 
     // this needs to be done here as uniformBufferContent is owned by this class
     const std::vector<UniformBufferStruct> uniformBufferVector {uniformBufferContent};
@@ -527,16 +394,70 @@ ParticleRenderer::ParticleRenderer() : imageSize(resources.extent.width, resourc
 }
 
 ParticleRenderer::~ParticleRenderer() {
-    resources.device.freeCommandBuffers(resources.graphicsCommandPool, commandBuffer);
-    resources.device.destroyFramebuffer(framebuffer);
+    backgroundEnvironmentPipeline.reset();
+    background2DPipeline.reset();
+    chessboardPipeline.reset();
+    particleCirclePipeline.reset();
+    rayMarcherPipeline.reset();
+    releaseFramebufferResources();
     resources.device.destroyRenderPass(renderPass);
+}
 
+void ParticleRenderer::createFramebufferResources() {
+    imageSize = vk::Extent3D {resources.extent.width, resources.extent.height, 1};
+    vk::ImageCreateInfo imageInfo {
+            {}, vk::ImageType::e2D, resources.surfaceFormat.format, imageSize, 1, 1,
+            vk::SampleCountFlagBits::e1, vk::ImageTiling::eOptimal,
+            {vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc},
+            vk::SharingMode::eExclusive, 1, &resources.gQ, vk::ImageLayout::eUndefined};
+    createImage(resources.pDevice, resources.device, imageInfo, {vk::MemoryPropertyFlagBits::eDeviceLocal},
+                "render-color-attachment", colorAttachment, colorAttachmentMemory);
+
+    vk::ImageViewCreateInfo viewInfo {
+            {}, colorAttachment, vk::ImageViewType::e2D, resources.surfaceFormat.format, {},
+            {{vk::ImageAspectFlagBits::eColor}, 0, 1, 0, 1}};
+    colorAttachmentView = resources.device.createImageView(viewInfo);
+
+    imageInfo.format = vk::Format::eD32Sfloat;
+    imageInfo.usage = {vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eInputAttachment | vk::ImageUsageFlagBits::eSampled};
+    createImage(resources.pDevice, resources.device, imageInfo, {vk::MemoryPropertyFlagBits::eDeviceLocal},
+                "render-depth-attachment", depthImage, depthImageMemory);
+    viewInfo.image = depthImage;
+    viewInfo.format = imageInfo.format;
+    viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
+    depthImageView = resources.device.createImageView(viewInfo);
+    sharedResources->depthImageView = depthImageView;
+
+    std::array<vk::ImageView, 3> attachmentViews {colorAttachmentView, depthImageView, depthImageView};
+    framebuffer = resources.device.createFramebuffer({{}, renderPass, attachmentViews,
+                                                      imageSize.width, imageSize.height, imageSize.depth});
+}
+
+void ParticleRenderer::releaseFramebufferResources() {
+    if (commandBuffer) {
+        resources.device.freeCommandBuffers(resources.graphicsCommandPool, commandBuffer);
+        commandBuffer = nullptr;
+    }
+    resources.device.destroyFramebuffer(framebuffer);
     resources.device.destroyImageView(colorAttachmentView);
     resources.device.destroyImage(colorAttachment);
     resources.device.freeMemory(colorAttachmentMemory);
     resources.device.destroyImageView(depthImageView);
     resources.device.destroyImage(depthImage);
     resources.device.freeMemory(depthImageMemory);
+    framebuffer = nullptr;
+    colorAttachmentView = nullptr;
+    colorAttachment = nullptr;
+    colorAttachmentMemory = nullptr;
+    depthImageView = nullptr;
+    depthImage = nullptr;
+    depthImageMemory = nullptr;
+    sharedResources->depthImageView = nullptr;
+}
+
+void ParticleRenderer::resize() {
+    releaseFramebufferResources();
+    createFramebufferResources();
 }
 
 vk::CommandBuffer ParticleRenderer::run(const SimulationState &simulationState, const RenderParameters &renderParameters) {
@@ -544,7 +465,7 @@ vk::CommandBuffer ParticleRenderer::run(const SimulationState &simulationState, 
             simulationState.parameters.numParticles,
             static_cast<uint32_t>(renderParameters.backgroundField),
             static_cast<uint32_t>(renderParameters.particleColor),
-            renderParameters.particleRadius,
+            scaleVisualSize(renderParameters.particleRadius),
             simulationState.spatialRadius};
 
     if (!(ub == uniformBufferContent)) {
@@ -580,6 +501,16 @@ void ParticleRenderer::updateCmd(const SimulationState &simulationState, const R
     commandBuffer.beginRenderPass(
             {renderPass, framebuffer, {{0, 0}, resources.extent}, clearValues.size(), clearValues.data()},
             vk::SubpassContents::eInline);
+
+    vk::Viewport viewport {0.0f,
+                           static_cast<float>(resources.extent.height),
+                           static_cast<float>(resources.extent.width),
+                           -static_cast<float>(resources.extent.height),
+                           0.0f,
+                           1.0f};
+    vk::Rect2D scissor {{0, 0}, resources.extent};
+    commandBuffer.setViewport(0, viewport);
+    commandBuffer.setScissor(0, scissor);
 
 
     /* ========== Background Subpass ========== */
@@ -1028,6 +959,7 @@ RayMarcherPipeline::RayMarcherPipeline(const vk::RenderPass &renderPass, uint32_
 
 RayMarcherPipeline::~RayMarcherPipeline() {
     resources.device.destroyPipeline(pipeline);
+    resources.device.destroyPipeline(waterPipeline);
     resources.device.destroyPipelineLayout(pipelineLayout);
 }
 

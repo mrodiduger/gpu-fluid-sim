@@ -1,6 +1,10 @@
 #include "debug_image.h"
 
-DebugImage::DebugImage(std::string name) {
+DebugImage::DebugImage(std::string name) : name(std::move(name)) {
+    create();
+}
+
+void DebugImage::create() {
 
     vk::ImageCreateInfo imageInfo(
             {},
@@ -17,7 +21,7 @@ DebugImage::DebugImage(std::string name) {
             &resources.gQ,
             vk::ImageLayout::eUndefined);
 
-    createImage(resources.pDevice, resources.device, imageInfo, {vk::MemoryPropertyFlagBits::eDeviceLocal}, std::move(name), image, imageMemory);
+    createImage(resources.pDevice, resources.device, imageInfo, {vk::MemoryPropertyFlagBits::eDeviceLocal}, name, image, imageMemory);
 
     vk::ImageViewCreateInfo viewInfo(
             {},
@@ -45,9 +49,21 @@ DebugImage::DebugImage(std::string name) {
 }
 
 DebugImage::~DebugImage() {
+    release();
+}
+
+void DebugImage::release() {
     resources.device.destroyImageView(view);
     resources.device.destroyImage(image);
     resources.device.freeMemory(imageMemory);
+    view = nullptr;
+    image = nullptr;
+    imageMemory = nullptr;
+}
+
+void DebugImage::resize() {
+    release();
+    create();
 }
 
 void DebugImage::clear(vk::CommandBuffer cmd, std::array<float, 4> color) {

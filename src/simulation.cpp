@@ -265,6 +265,20 @@ Simulation::~Simulation() {
     resources.device.destroySemaphore(timelineSemaphore);
 }
 
+void Simulation::releaseSwapchainResources() {
+    imguiUi->releaseSwapchainResources();
+}
+
+void Simulation::resize() {
+    simulationState->debugImagePhysics->resize();
+    simulationState->debugImageSort->resize();
+    simulationState->debugImageRenderer->resize();
+    particleRenderer->resize();
+    imguiUi->resize();
+    updateResetCommandBuffer();
+    prevTime = glfwGetTime();
+}
+
 void Simulation::processUpdateFlags(const UpdateFlags &updateFlags) {
     if (updateFlags.resetSimulation) {
         auto newState = std::make_unique<SimulationState>(simulationParameters, simulationState->camera);
@@ -312,18 +326,9 @@ void Simulation::reset() {
         endSingleTimeCommands(resources.device, resources.transferQueue, resources.transferCommandPool, cmd);
     }
 
-    cmdReset.reset();
+    updateResetCommandBuffer();
 
-    cmdReset.begin(vk::CommandBufferBeginInfo());
-
-    writeTimestamp(cmdReset, ResetBegin);
-    simulationState->debugImagePhysics->clear(cmdReset, {1, 0, 0, 1});
-    simulationState->debugImageSort->clear(cmdReset, {0, 1, 0, 1});
-    simulationState->debugImageRenderer->clear(cmdReset, {0, 0, 1, 1});
-    writeTimestamp(cmdReset, ResetEnd);
-
-    cmdReset.end();
-
+    cmdEmpty.reset();
     cmdEmpty.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eSimultaneousUse));
     cmdEmpty.end();
 
@@ -333,6 +338,17 @@ void Simulation::reset() {
     prevTime = glfwGetTime();
 
     std::cout << "Simulation reset done" << std::endl;
+}
+
+void Simulation::updateResetCommandBuffer() {
+    cmdReset.reset();
+    cmdReset.begin(vk::CommandBufferBeginInfo());
+    writeTimestamp(cmdReset, ResetBegin);
+    simulationState->debugImagePhysics->clear(cmdReset, {1, 0, 0, 1});
+    simulationState->debugImageSort->clear(cmdReset, {0, 1, 0, 1});
+    simulationState->debugImageRenderer->clear(cmdReset, {0, 0, 1, 1});
+    writeTimestamp(cmdReset, ResetEnd);
+    cmdReset.end();
 }
 
 bool Simulation::updateTime() {

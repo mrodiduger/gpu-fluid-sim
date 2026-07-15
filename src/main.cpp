@@ -20,8 +20,8 @@
 #include "renderdoc.h"
 #include "simulation.h"
 
-int width = 1200;
-int height = 1000;
+constexpr int WINDOW_WIDTH = 1600;
+constexpr int WINDOW_HEIGHT = 900;
 
 void render() {
     Render render(resources, 2);
@@ -143,7 +143,7 @@ int main(int argc, char *argv[]) {
     }
 
     //try {
-    initApp(true, "Project", width, height);
+    initApp(true, "Project", WINDOW_WIDTH, WINDOW_HEIGHT);
     renderdoc::initialize();
 
     if (argc > 1 && argv[1] == std::string("benchmark")) {

@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.23)
 project(Project)
 
+include(CTest)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -126,6 +128,17 @@ add_shader(${PROJECT_NAME} shaders/spatial_lookup.index.comp)
 
 target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} PUBLIC Vulkan::Vulkan stb glfw tinyobj yaml-cpp)
+
+if (BUILD_TESTING)
+    add_executable(SwapchainStatusTest tests/swapchain_status_test.cpp)
+    target_include_directories(SwapchainStatusTest PRIVATE include ${Vulkan_INCLUDE_DIRS})
+    target_link_libraries(SwapchainStatusTest PRIVATE Vulkan::Vulkan)
+    add_test(NAME SwapchainStatusTest COMMAND SwapchainStatusTest)
+
+    add_executable(VisualScaleTest tests/visual_scale_test.cpp)
+    target_include_directories(VisualScaleTest PRIVATE include)
+    add_test(NAME VisualScaleTest COMMAND VisualScaleTest)
+endif ()
 
 if (RENDERDOC_PATH)
     target_include_directories(${PROJECT_NAME} PRIVATE ${RENDERDOC_PATH})

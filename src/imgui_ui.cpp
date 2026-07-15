@@ -6,6 +6,7 @@
 #include "imgui_ui.h"
 #include "simulation_parameters.h"
 #include "simulation_state.h"
+#include "visual_scale.h"
 
 ImguiUi::ImguiUi() {
     disabled = std::any_of(resources.args.begin(), resources.args.end(), [&](std::string &s) { return s == uiOffArg; });
@@ -25,6 +26,9 @@ ImguiUi::ImguiUi() {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
+    ImFontConfig fontConfig;
+    fontConfig.SizePixels = scaleVisualSize(13.0f);
+    io.Fonts->AddFontDefault(&fontConfig);
     // Setup Platform/Renderer bindings
 
     vk::AttachmentDescription attachment(
@@ -62,26 +66,9 @@ ImguiUi::ImguiUi() {
 
     ImGui_ImplGlfw_InitForVulkan(resources.window, true);
 
-    ImGui_ImplVulkan_InitInfo init_info = {
-            resources.instance,
-            resources.pDevice,
-            resources.device,
-            resources.gQ,
-            resources.graphicsQueue,
-            nullptr,
-            descriptorPool,
-            0,
-            static_cast<uint32_t>(resources.swapchainImages.size()),
-            static_cast<uint32_t>(resources.swapchainImages.size()),
-            VK_SAMPLE_COUNT_1_BIT,
-            false,
-            {},
-            nullptr,
-            nullptr,
-            0};
-
-    ImGui_ImplVulkan_Init(&init_info, renderPass);
+    initVulkanBackend();
     ImGui::StyleColorsDark();
+    ImGui::GetStyle().ScaleAllSizes(VISUAL_SCALE);
 
     ImGui_ImplVulkan_CreateFontsTexture();
 
@@ -127,6 +114,29 @@ ImguiUi::ImguiUi() {
     for (size_t i = 0; i < sceneFiles.size(); i++) {
         sceneFilesCStr.emplace_back(sceneFiles[i].c_str());
     }
+}
+
+void ImguiUi::initVulkanBackend() {
+    imageCount = static_cast<uint32_t>(resources.swapchainImages.size());
+    ImGui_ImplVulkan_InitInfo initInfo = {
+            resources.instance,
+            resources.pDevice,
+            resources.device,
+            resources.gQ,
+            resources.graphicsQueue,
+            nullptr,
+            descriptorPool,
+            0,
+            imageCount,
+            imageCount,
+            VK_SAMPLE_COUNT_1_BIT,
+            false,
+            {},
+            nullptr,
+            nullptr,
+            0};
+
+    ImGui_ImplVulkan_Init(&initInfo, renderPass);
 }
 
 void ImguiUi::initCommandBuffers() {
@@ -207,7 +217,7 @@ void ImguiUi::drawUi(UiBindings &bindings) {
         ImGui::ShowDemoWindow();
 
     ImGui::Begin("Settings");
-    ImGui::PushItemWidth(120);
+    ImGui::PushItemWidth(scaleVisualSize(120.0f));
 
     bool paused = !bindings.simulationState || bindings.simulationState->paused;
     updateFlags.togglePause = ImGui::Button(paused ? "Resume" : "Pause ");
@@ -291,6 +301,19 @@ void ImguiUi::destroyCommandBuffers() {
             resources.device.destroyFramebuffer(framebuffer);
         frameBuffers.clear();
     }
+}
+
+void ImguiUi::releaseSwapchainResources() {
+    destroyCommandBuffers();
+}
+
+void ImguiUi::resize() {
+    if (imageCount == resources.swapchainImages.size())
+        return;
+
+    ImGui_ImplVulkan_Shutdown();
+    initVulkanBackend();
+    ImGui_ImplVulkan_CreateFontsTexture();
 }
 
 ImguiUi::~ImguiUi() {

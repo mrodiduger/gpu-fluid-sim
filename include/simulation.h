@@ -24,6 +24,8 @@ public:
     void updateTimestamps();
     bool updateTime();
     void run(uint32_t imageIndex, vk::Semaphore waitImageAvailable, vk::Semaphore signalRenderFinished, vk::Fence signalSubmitFinished);
+    void releaseSwapchainResources();
+    void resize();
     SimulationState &getState() { return *simulationState; }
     const QueryTimes &getQueryTimes() { return queryTimes; }
 
@@ -33,6 +35,7 @@ private:
 
     void processUpdateFlags(const UpdateFlags &updateFlags);
     void updateCommandBuffers();
+    void updateResetCommandBuffer();
 
     RenderParameters renderParameters;
     SimulationParameters simulationParameters;

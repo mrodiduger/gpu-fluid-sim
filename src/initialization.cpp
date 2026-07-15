@@ -49,8 +49,11 @@ void AppResources::destroy() {
     this->device.destroyQueryPool(this->queryPool);
     //this->device.freeCommandBuffers(this->computeCommandPool, 1U, &this->computeCommandBuffer);
     //this->device.freeCommandBuffers(this->transferCommandPool, 1U, &this->transferCommandBuffer);
-    this->device.destroyCommandPool(this->computeCommandPool);
-    //this->device.destroyCommandPool(this->transferCommandPool);
+    if (this->transferCommandPool != this->graphicsCommandPool &&
+        this->transferCommandPool != this->computeCommandPool)
+        this->device.destroyCommandPool(this->transferCommandPool);
+    if (this->computeCommandPool != this->graphicsCommandPool)
+        this->device.destroyCommandPool(this->computeCommandPool);
     this->device.destroyCommandPool(this->graphicsCommandPool);
 
     for (auto imageView: this->swapchainImageViews) {
@@ -84,7 +87,7 @@ void initApp(bool withWindow, const std::string &name, int width, int height) {
             throw std::runtime_error(
                     "GLFW reports to have no Vulkan support! Maybe it couldn't find the Vulkan loader!");
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
         resources.window = glfwCreateWindow(width, height, name.c_str(), nullptr, nullptr);
     }
 
@@ -495,7 +498,7 @@ void destroyQueryPool(vk::Device &device, vk::QueryPool &queryPool) {
 }
 
 
-void createSwapchain(AppResources &app) {
+void createSwapchain(AppResources &app, vk::SwapchainKHR oldSwapchain) {
     // -- CAPABILITIES --
     // Get the surface capabilities for the given surface on the given physical device
     auto capabilities = app.pDevice.getSurfaceCapabilitiesKHR(app.surface);
@@ -517,8 +520,6 @@ void createSwapchain(AppResources &app) {
             break;
         }
     }
-    app.surfaceFormat = selectedSurfaceFormat;
-
     if (!app.pDevice.getSurfaceSupportKHR(app.gQ, app.surface))
         throw std::runtime_error("Graphics Queue doesn't support present to surface!");
 
@@ -553,8 +554,6 @@ void createSwapchain(AppResources &app) {
                                            capabilities.maxImageExtent.height);
     }
 
-    app.extent = selectedExtent;
-
     // How many images are in the swap chain? Get 1 more than the minimum to allow triple buffering
     uint32_t selectedImageCount = capabilities.minImageCount + 1;
     // If imageCount higher than max, then clamp down to max
@@ -579,28 +578,45 @@ void createSwapchain(AppResources &app) {
             // How to handle blending images with external graphics (e.g. other windows)
             selectedPresentMode,// Swapchain presentation mode
             false,
-            VK_NULL_HANDLE);
+            oldSwapchain);
 
-    app.swapchain = app.device.createSwapchainKHR(createInfo, nullptr);
-    // Get swap chain images (first count, then values)
-    app.swapchainImages = app.device.getSwapchainImagesKHR(app.swapchain);
+    auto newSwapchain = app.device.createSwapchainKHR(createInfo, nullptr);
+    auto newSwapchainImages = app.device.getSwapchainImagesKHR(newSwapchain);
 
-    app.swapchainImageViews.resize(0);
-    for (auto image: app.swapchainImages) {
-        vk::ImageViewCreateInfo createInfo(
-                vk::ImageViewCreateFlagBits(),
-                image,
-                vk::ImageViewType::e2D,
-                selectedSurfaceFormat.format,
-                {vk::ComponentSwizzle::eIdentity,
-                 vk::ComponentSwizzle::eIdentity,
-                 vk::ComponentSwizzle::eIdentity,
-                 vk::ComponentSwizzle::eIdentity},
-                {vk::ImageAspectFlagBits::eColor,
-                 0, 1, 0, 1});
+    std::vector<vk::ImageView> newSwapchainImageViews;
+    try {
+        for (auto image: newSwapchainImages) {
+            vk::ImageViewCreateInfo createInfo(
+                    vk::ImageViewCreateFlagBits(),
+                    image,
+                    vk::ImageViewType::e2D,
+                    selectedSurfaceFormat.format,
+                    {vk::ComponentSwizzle::eIdentity,
+                     vk::ComponentSwizzle::eIdentity,
+                     vk::ComponentSwizzle::eIdentity,
+                     vk::ComponentSwizzle::eIdentity},
+                    {vk::ImageAspectFlagBits::eColor,
+                     0, 1, 0, 1});
 
-        app.swapchainImageViews.push_back(app.device.createImageView(createInfo));
+            newSwapchainImageViews.push_back(app.device.createImageView(createInfo));
+        }
+    } catch (...) {
+        for (auto imageView: newSwapchainImageViews)
+            app.device.destroyImageView(imageView);
+        app.device.destroySwapchainKHR(newSwapchain);
+        throw;
     }
+
+    for (auto imageView: app.swapchainImageViews)
+        app.device.destroyImageView(imageView);
+    if (oldSwapchain)
+        app.device.destroySwapchainKHR(oldSwapchain);
+
+    app.surfaceFormat = selectedSurfaceFormat;
+    app.extent = selectedExtent;
+    app.swapchain = newSwapchain;
+    app.swapchainImages = std::move(newSwapchainImages);
+    app.swapchainImageViews = std::move(newSwapchainImageViews);
 }
 
 void printDeviceCapabilities(vk::PhysicalDevice &pDevice) {

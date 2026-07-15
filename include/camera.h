@@ -15,6 +15,8 @@ public:
 
     void reset();
 
+    void setAspect(uint32_t width, uint32_t height);
+
     void rotateTheta(float radians);
 
     void rotatePhi(float radians);

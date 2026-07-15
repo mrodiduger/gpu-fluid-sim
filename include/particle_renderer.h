@@ -45,6 +45,7 @@ public:
     ~ParticleRenderer();
     vk::CommandBuffer run(const SimulationState &simulationState, const RenderParameters &renderParameters);
     void updateCmd(const SimulationState &simulationState, const RenderParameters &renderParameters);
+    void resize();
     [[nodiscard]] vk::Image getImage();
 
     struct SharedResources {
@@ -82,6 +83,9 @@ private:
     std::unique_ptr<RayMarcherPipeline> rayMarcherPipeline;
     std::unique_ptr<ChessboardPipeline> chessboardPipeline;
     std::shared_ptr<SharedResources> sharedResources;
+
+    void createFramebufferResources();
+    void releaseFramebufferResources();
 
     struct UniformBufferStruct {
         uint32_t numParticles = 128;

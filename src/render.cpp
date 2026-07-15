@@ -1,24 +1,48 @@
 #include "render.h"
 
 #include "simulation.h"
+#include "swapchain_status.h"
 
 void Render::renderSimulationFrame(Simulation &simulation) {
+    if (framebufferResized) {
+        recreateSwapchain(simulation);
+        if (glfwWindowShouldClose(app.window))
+            return;
+    }
+
     auto idx = currentFrameIdx % framesinlight;
     if (app.device.waitForFences({fences[idx]}, true, ~0) != vk::Result::eSuccess)
         throw std::runtime_error("Waiting for fence didn't succeed!");
-    app.device.resetFences({fences[idx]});
-    auto result = app.device.acquireNextImageKHR(app.swapchain, ~0, swapchainAcquireSemaphores[idx], VK_NULL_HANDLE);
-    if (result.result != vk::Result::eSuccess)
-        throw std::runtime_error("Couldn't acquire next swapchain image!");
+
+    vk::ResultValue<uint32_t> result {vk::Result::eSuccess, 0};
+    try {
+        result = app.device.acquireNextImageKHR(app.swapchain, ~0, swapchainAcquireSemaphores[idx], VK_NULL_HANDLE);
+    } catch (const vk::OutOfDateKHRError &) {
+        recreateSwapchain(simulation);
+        return;
+    }
+    if (result.result != vk::Result::eSuccess && result.result != vk::Result::eSuboptimalKHR)
+        vk::detail::resultCheck(result.result, "Couldn't acquire next swapchain image!");
 
     auto swapchainIndex = result.value;
+    app.device.resetFences({fences[idx]});
 
     simulation.run(swapchainIndex, swapchainAcquireSemaphores[idx], completionSemaphores[idx], fences[idx]);
 
     vk::PresentInfoKHR presentInfo(completionSemaphores[idx], app.swapchain, swapchainIndex);
-    vk::detail::resultCheck(app.graphicsQueue.presentKHR(presentInfo), "Failed to present image");
+    vk::Result presentResult;
+    try {
+        presentResult = app.graphicsQueue.presentKHR(presentInfo);
+    } catch (const vk::OutOfDateKHRError &) {
+        presentResult = vk::Result::eErrorOutOfDateKHR;
+    }
+    if (presentResult != vk::Result::eSuccess && !requiresSwapchainRecreation(presentResult))
+        vk::detail::resultCheck(presentResult, "Failed to present image");
 
     currentFrameIdx = (currentFrameIdx + 1) % framesinlight;
+
+    if (framebufferResized || requiresSwapchainRecreation(result.result) || requiresSwapchainRecreation(presentResult))
+        recreateSwapchain(simulation);
 }
 
 void Render::input() {
@@ -66,17 +90,37 @@ void Render::mouseCallback(GLFWwindow *window, double xpos, double ypos) {
     }
 }
 
+void Render::framebufferSizeCallback(GLFWwindow *window, int, int) {
+    auto *render = static_cast<Render *>(glfwGetWindowUserPointer(window));
+    render->framebufferResized = true;
+}
+
+void Render::recreateSwapchain(Simulation &simulation) {
+    int width;
+    int height;
+    glfwGetFramebufferSize(app.window, &width, &height);
+    while ((width == 0 || height == 0) && !glfwWindowShouldClose(app.window)) {
+        glfwWaitEvents();
+        glfwGetFramebufferSize(app.window, &width, &height);
+    }
+    if (glfwWindowShouldClose(app.window))
+        return;
+
+    app.device.waitIdle();
+    releaseSwapchainResources();
+    simulation.releaseSwapchainResources();
+    createSwapchain(app, app.swapchain);
+    createSwapchainResources();
+    simulation.resize();
+    camera->setAspect(app.extent.width, app.extent.height);
+    framebufferResized = false;
+}
+
 Render::~Render() {
+    releaseSwapchainResources();
     app.device.destroyPipelineLayout(layout);
     app.device.destroyRenderPass(renderPass);
     app.device.destroyPipeline(opaquePipeline);
-
-    app.device.destroyImageView(depthImageView);
-    app.device.freeMemory(depthImageMemory);
-    app.device.destroyImage(depthImage);
-
-    for (auto framebuffer: framebuffers)
-        app.device.destroyFramebuffer(framebuffer);
     for (auto fence: fences)
         app.device.destroyFence(fence);
     for (auto semaphore: swapchainAcquireSemaphores)
@@ -90,6 +134,7 @@ Render::Render(AppResources &app, int framesinlight) : app(app), framesinlight(f
 
     glfwSetWindowUserPointer(app.window, this);
     glfwSetCursorPosCallback(app.window, &Render::mouseCallback);
+    glfwSetFramebufferSizeCallback(app.window, &Render::framebufferSizeCallback);
 
     prevtime = glfwGetTime();
 
@@ -173,35 +218,7 @@ Render::Render(AppResources &app, int framesinlight) : app(app), framesinlight(f
 
         renderPass = app.device.createRenderPass(cI);
     }
-    {
-        vk::ImageCreateInfo cI = {
-                {},
-                vk::ImageType::e2D,
-                vk::Format::eD32Sfloat,
-                {app.extent.width, app.extent.height, 1},
-                1,
-                1,
-                vk::SampleCountFlagBits::e1,
-                vk::ImageTiling::eOptimal,
-                vk::ImageUsageFlagBits::eDepthStencilAttachment,
-                vk::SharingMode::eExclusive,
-                0,
-                {},
-                vk::ImageLayout::eUndefined};
-
-        createImage(app.pDevice, app.device, cI, vk::MemoryPropertyFlagBits::eDeviceLocal, "Depth Buffer",
-                    depthImage, depthImageMemory);
-
-        depthImageView = app.device.createImageView({{}, depthImage, vk::ImageViewType::e2D, vk::Format::eD32Sfloat, {vk::ComponentSwizzle::eIdentity, vk::ComponentSwizzle::eIdentity, vk::ComponentSwizzle::eIdentity, vk::ComponentSwizzle::eIdentity}, {vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1}});
-    }
-
-    {
-        framebuffers.clear();
-        for (int i = 0; i < app.swapchainImages.size(); i++) {
-            vk::ImageView attachments[] = {app.swapchainImageViews[i], depthImageView};
-            framebuffers.push_back(app.device.createFramebuffer({{}, renderPass, 2, &attachments[0], app.extent.width, app.extent.height, 1}));
-        }
-    }
+    createSwapchainResources();
 
     for (int i = 0; i < framesinlight; i++) {
         fences.push_back(app.device.createFence({vk::FenceCreateFlagBits::eSignaled}));
@@ -209,4 +226,46 @@ Render::Render(AppResources &app, int framesinlight) : app(app), framesinlight(f
         completionSemaphores.push_back(app.device.createSemaphore({}));
         commandBuffers.push_back(app.device.allocateCommandBuffers({app.graphicsCommandPool, vk::CommandBufferLevel::ePrimary, 1U})[0]);
     }
+}
+
+void Render::createSwapchainResources() {
+    vk::ImageCreateInfo createInfo = {
+            {},
+            vk::ImageType::e2D,
+            vk::Format::eD32Sfloat,
+            {app.extent.width, app.extent.height, 1},
+            1,
+            1,
+            vk::SampleCountFlagBits::e1,
+            vk::ImageTiling::eOptimal,
+            vk::ImageUsageFlagBits::eDepthStencilAttachment,
+            vk::SharingMode::eExclusive,
+            0,
+            {},
+            vk::ImageLayout::eUndefined};
+    createImage(app.pDevice, app.device, createInfo, vk::MemoryPropertyFlagBits::eDeviceLocal, "Depth Buffer",
+                depthImage, depthImageMemory);
+    depthImageView = app.device.createImageView({{}, depthImage, vk::ImageViewType::e2D, vk::Format::eD32Sfloat,
+                                                 {vk::ComponentSwizzle::eIdentity, vk::ComponentSwizzle::eIdentity,
+                                                  vk::ComponentSwizzle::eIdentity, vk::ComponentSwizzle::eIdentity},
+                                                 {vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1}});
+
+    framebuffers.clear();
+    for (auto imageView: app.swapchainImageViews) {
+        vk::ImageView attachments[] = {imageView, depthImageView};
+        framebuffers.push_back(app.device.createFramebuffer(
+                {{}, renderPass, 2, attachments, app.extent.width, app.extent.height, 1}));
+    }
+}
+
+void Render::releaseSwapchainResources() {
+    for (auto framebuffer: framebuffers)
+        app.device.destroyFramebuffer(framebuffer);
+    framebuffers.clear();
+    app.device.destroyImageView(depthImageView);
+    app.device.destroyImage(depthImage);
+    app.device.freeMemory(depthImageMemory);
+    depthImageView = nullptr;
+    depthImage = nullptr;
+    depthImageMemory = nullptr;
 }

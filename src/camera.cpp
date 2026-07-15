@@ -8,6 +8,10 @@ void Camera::reset() {
     aspect = (float) resources.extent.width / (float) resources.extent.height;
 }
 
+void Camera::setAspect(uint32_t width, uint32_t height) {
+    aspect = static_cast<float>(width) / static_cast<float>(height);
+}
+
 glm::vec3 Camera::forwardDir() const {
     return {
             std::sin(phi) * std::sin(theta),
