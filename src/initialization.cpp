@@ -221,10 +221,7 @@ vk::DebugUtilsMessengerCreateInfoEXT makeDebugUtilsMessengerCreateInfoEXT() {
     Required before creating instance for loading the extension VK_EXT_DEBUG_UTILS_EXTENSION_NAME
 */
 void initDynamicLoader() {
-    static vk::DynamicLoader dl;
-    static PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>(
-            "vkGetInstanceProcAddr");
-    VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
+    VULKAN_HPP_DEFAULT_DISPATCHER.init();
 }
 
 void createInstance(vk::Instance &instance, vk::DebugUtilsMessengerEXT &debugUtilsMessenger,
@@ -277,7 +274,7 @@ std::tuple<uint32_t, uint32_t, uint32_t> getGCTQueues(vk::PhysicalDevice &pDevic
     using Chain = vk::StructureChain<vk::QueueFamilyProperties2, vk::QueueFamilyCheckpointPropertiesNV>;
     using QFB = vk::QueueFlagBits;
     auto queueFamilyProperties2 = pDevice.getQueueFamilyProperties2<
-            Chain, std::allocator<Chain>, vk::DispatchLoaderDynamic>();
+            Chain, std::allocator<Chain>>();
 
     for (uint32_t j = 0; j < queueFamilyProperties2.size(); j++) {
         vk::QueueFamilyProperties const &properties =
@@ -453,7 +450,7 @@ void destroyCommandPool(vk::Device &device, vk::CommandPool &commandPool) {
 void showAvailableQueues(vk::PhysicalDevice &pDevice, bool diagExt) {
     using Chain = vk::StructureChain<vk::QueueFamilyProperties2, vk::QueueFamilyCheckpointPropertiesNV>;
     auto queueFamilyProperties2 = pDevice.getQueueFamilyProperties2<
-            Chain, std::allocator<Chain>, vk::DispatchLoaderDynamic>();
+            Chain, std::allocator<Chain>>();
 
     for (size_t j = 0; j < queueFamilyProperties2.size(); j++) {
         std::cout << "\t"
