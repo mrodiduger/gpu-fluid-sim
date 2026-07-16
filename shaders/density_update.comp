@@ -25,6 +25,7 @@ constants;
 #define GRID_CELL_SIZE constants.spatialRadius
 #define GRID_BINDING_LOOKUP 3
 #define GRID_BINDING_INDEX 4
+#define GRID_BINDING_COORDINATES -1
 #define COORDINATES_BUFFER_NAME positions
 #include "spatial_lookup.glsl"
 

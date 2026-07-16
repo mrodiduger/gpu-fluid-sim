@@ -31,13 +31,12 @@ uint nClass = dequantize_class(lookup); \
  continue; \
 }\
 foundClass = true; \
-VEC_T NEIGHBOUR_POSITION = dequantize_position(lookup); \
+uint NEIGHBOUR_INDEX = dequantize_index(lookup); \
+VEC_T NEIGHBOUR_POSITION = COORDINATES_BUFFER_NAME[NEIGHBOUR_INDEX]; \
 VEC_T difference = position - NEIGHBOUR_POSITION; \
 float NEIGHBOUR_DISTANCE_SQUARED = dot(difference, difference); \
  if (NEIGHBOUR_DISTANCE_SQUARED > radiusSquared) continue; \
 float NEIGHBOUR_DISTANCE = sqrt(NEIGHBOUR_DISTANCE_SQUARED); \
-\
-uint NEIGHBOUR_INDEX = dequantize_index(lookup); \
 {expression; } \
 }\
 }\

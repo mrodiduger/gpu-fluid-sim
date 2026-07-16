@@ -26,6 +26,7 @@ constants;
 #define GRID_CELL_SIZE constants.spatialRadius
 #define GRID_BINDING_LOOKUP 3
 #define GRID_BINDING_INDEX 4
+#define GRID_BINDING_COORDINATES -1
 #define COORDINATES_BUFFER_NAME positions
 #include "spatial_lookup.glsl"
 
@@ -56,40 +57,75 @@ float smoothingKernelDerivative(float radius, float dist) {
 }
 
 float density2pressure(float density) {
-    return constants.pressureMultiplier * (density - constants.targetDensity);
+    return constants.pressureMultiplier *
+           max(density - constants.targetDensity, 0.0);
 }
 
-float calculateSharedPressure(float density, float neighbourDensity) {
-    return (density2pressure(density) + density2pressure(neighbourDensity)) / 2;
-}
-
-void addPressureAndViscosityForces(inout VEC_T pressureForce, inout VEC_T viscosityForce, const VEC_T pos, const VEC_T velocity, const float density, const float radius, const float mass, uint neighbourIndex, VEC_T neighbourPosition, float neighbourDistance) {
+void addPressureAndViscosityAcceleration(
+        inout VEC_T pressureAcceleration,
+        inout VEC_T viscosityAcceleration,
+        const VEC_T position,
+        const VEC_T velocity,
+        const float pressureCoefficient,
+        const float radius,
+        uint neighbourIndex,
+        VEC_T neighbourPosition,
+        float neighbourDistance) {
     float neighbourDensity = densities[neighbourIndex];
+    float inverseNeighbourDensity = 1.0 / neighbourDensity;
 
-    float influence = (particleMass / neighbourDensity) * viscosityKernel(radius, neighbourDistance);
-    viscosityForce += (velocities[neighbourIndex] - velocity) * influence;
+    float viscosityInfluence =
+            particleMass * inverseNeighbourDensity *
+            viscosityKernel(radius, neighbourDistance);
+    viscosityAcceleration +=
+            (velocities[neighbourIndex] - velocity) * viscosityInfluence;
 
-    VEC_T diff = pos - neighbourPosition;
-    if (neighbourDistance >= radius) return;
-    VEC_T direction;
-    if (neighbourDistance == 0.0) {
-        return;
-    } else {
-        direction = diff / neighbourDistance;
-    }
-    float slope = -smoothingKernelDerivative(radius, neighbourDistance);
-    float sharedPressure = calculateSharedPressure(density, neighbourDensity);
-    pressureForce += sharedPressure * direction * slope * mass / density;
+    if (neighbourDistance == 0.0) return;
+
+    VEC_T direction = (position - neighbourPosition) / neighbourDistance;
+    float neighbourPressure = density2pressure(neighbourDensity);
+    float neighbourPressureCoefficient =
+            neighbourPressure *
+            inverseNeighbourDensity *
+            inverseNeighbourDensity;
+    float kernelDerivative =
+            smoothingKernelDerivative(radius, neighbourDistance);
+
+    pressureAcceleration -=
+            particleMass *
+            (pressureCoefficient + neighbourPressureCoefficient) *
+            direction *
+            kernelDerivative;
 }
 
-VEC_T calculatePressureAndViscosityForces(VEC_T position, VEC_T velocity, float density, float radius) {
-    VEC_T viscosityForce = VEC_T(0.0);
-    VEC_T pressureForce = VEC_T(0.0);
+VEC_T calculatePressureAndViscosityAcceleration(
+        VEC_T position,
+        VEC_T velocity,
+        float density,
+        float radius) {
+    float inverseDensity = 1.0 / density;
+    float pressure = density2pressure(density);
+    float pressureCoefficient =
+            pressure * inverseDensity * inverseDensity;
+    VEC_T pressureAcceleration = VEC_T(0.0);
+    VEC_T viscosityAcceleration = VEC_T(0.0);
+
     FOREACH_NEIGHBOUR(position, {
-        addPressureAndViscosityForces(pressureForce, viscosityForce, position, velocity, density, radius, particleMass, NEIGHBOUR_INDEX, NEIGHBOUR_POSITION, NEIGHBOUR_DISTANCE);
+        addPressureAndViscosityAcceleration(
+                pressureAcceleration,
+                viscosityAcceleration,
+                position,
+                velocity,
+                pressureCoefficient,
+                radius,
+                NEIGHBOUR_INDEX,
+                NEIGHBOUR_POSITION,
+                NEIGHBOUR_DISTANCE);
     });
 
-    return ((pressureForce / density) + (viscosityForce * constants.viscosity)) * constants.deltaTime;
+    return (pressureAcceleration +
+            viscosityAcceleration * constants.viscosity) *
+           constants.deltaTime;
 }
 
 void main() {
@@ -100,7 +136,11 @@ void main() {
     VEC_T velocity = velocities[index];
     float density = densities[index];
 
-    velocity += calculatePressureAndViscosityForces(position, velocity, density, constants.spatialRadius);
+    velocity += calculatePressureAndViscosityAcceleration(
+            position,
+            velocity,
+            density,
+            constants.spatialRadius);
 #ifdef DEF_2D
     velocity += VEC_T(0.0, constants.gravity * constants.deltaTime);
 #endif

@@ -17,6 +17,7 @@ layout (binding = 2) uniform UniformBuffer {
 #define GRID_BINDING_INDEX 4
 #define GRID_NUM_ELEMENTS numParticles
 #define GRID_CELL_SIZE spatialRadius
+#define GRID_BINDING_COORDINATES -1
 #define COORDINATES_BUFFER_NAME coordinates
 #include "spatial_lookup.glsl"
 

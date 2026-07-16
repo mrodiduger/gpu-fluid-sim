@@ -154,6 +154,11 @@ if (BUILD_TESTING)
     target_compile_definitions(ParticlePipelineSourceTest
             PRIVATE GPU_FLUID_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     add_test(NAME ParticlePipelineSourceTest COMMAND ParticlePipelineSourceTest)
+
+    add_executable(SphShaderSourceTest tests/sph_shader_source_test.cpp)
+    target_compile_definitions(SphShaderSourceTest
+            PRIVATE GPU_FLUID_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME SphShaderSourceTest COMMAND SphShaderSourceTest)
 endif ()
 
 if (RENDERDOC_PATH)
