@@ -1,4 +1,7 @@
 #include "initialization.h"
+#include "simulation_diagnostics.h"
+
+#include <iomanip>
 
 struct SpatialHashResult {
     uint32_t lookupKey;
@@ -119,6 +122,43 @@ void Simulation::check() {
 
     std::vector<float> particles(simulationParameters.numParticles * (simulationParameters.type == SceneType::SPH_BOX_2D ? 2 : 4));
     fillHostWithStagingBuffer(simulationState->particleCoordinateBuffer, particles);
+
+    const uint32_t physicalDimensions =
+            simulationParameters.type == SceneType::SPH_BOX_2D ? 2 : 3;
+    const uint32_t stride =
+            simulationParameters.type == SceneType::SPH_BOX_2D ? 2 : 4;
+
+    std::vector<float> velocities(simulationParameters.numParticles * stride);
+    fillHostWithStagingBuffer(simulationState->particleVelocityBuffer, velocities);
+
+    std::vector<float> densities(simulationParameters.numParticles);
+    fillHostWithStagingBuffer(simulationState->particleDensityBuffer, densities);
+
+    const auto accuracy = calculateSimulationAccuracyStats(
+            particles,
+            velocities,
+            densities,
+            physicalDimensions,
+            stride,
+            simulationParameters.targetDensity);
+
+    std::cout << std::fixed << std::setprecision(3)
+              << "Accuracy "
+              << "MeanDensity: " << accuracy.meanDensity << " "
+              << "MeanSignedDensityError: " << accuracy.meanSignedDensityError * 100.0 << "% "
+              << "MeanPositiveDensityError: " << accuracy.meanPositiveDensityError * 100.0 << "% "
+              << "MaxPositiveDensityError: " << accuracy.maxPositiveDensityError * 100.0 << "% "
+              << "RmsSpeed: " << accuracy.rmsSpeed << " "
+              << "NonFinitePositions: " << accuracy.nonFinitePositions << " "
+              << "NonFiniteVelocities: " << accuracy.nonFiniteVelocities << " "
+              << "NonFiniteDensities: " << accuracy.nonFiniteDensities
+              << std::defaultfloat << std::endl;
+
+    if (accuracy.nonFinitePositions > 0 ||
+        accuracy.nonFiniteVelocities > 0 ||
+        accuracy.nonFiniteDensities > 0) {
+        throw std::runtime_error("particle state contains non-finite values");
+    }
 
     uint32_t lookupSize = nextPowerOfTwo(simulationParameters.numParticles);
     std::vector<SpatialLookupEntry> spatial_lookup(lookupSize);

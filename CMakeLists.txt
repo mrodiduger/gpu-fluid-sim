@@ -89,6 +89,7 @@ set(SOURCES
         src/colormaps.cpp
         src/render.cpp
         src/camera.cpp
+        src/simulation_diagnostics.cpp
 )
 
 add_compile_definitions(WORKING_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
@@ -138,6 +139,12 @@ if (BUILD_TESTING)
     add_executable(VisualScaleTest tests/visual_scale_test.cpp)
     target_include_directories(VisualScaleTest PRIVATE include)
     add_test(NAME VisualScaleTest COMMAND VisualScaleTest)
+
+    add_executable(SimulationDiagnosticsTest
+            tests/simulation_diagnostics_test.cpp
+            src/simulation_diagnostics.cpp)
+    target_include_directories(SimulationDiagnosticsTest PRIVATE include)
+    add_test(NAME SimulationDiagnosticsTest COMMAND SimulationDiagnosticsTest)
 endif ()
 
 if (RENDERDOC_PATH)
