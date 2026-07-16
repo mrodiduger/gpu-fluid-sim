@@ -21,6 +21,7 @@ mono_crash.*
 build/
 cmake-build-*/
 device_selection_cache
+.worktrees/
 
 # Build results
 [Dd]ebug/
