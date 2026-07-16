@@ -1,4 +1,5 @@
 #include "initialization.h"
+#include "particle_layout.h"
 #include "simulation_diagnostics.h"
 
 #include <iomanip>
@@ -124,9 +125,9 @@ void Simulation::check() {
     fillHostWithStagingBuffer(simulationState->particleCoordinateBuffer, particles);
 
     const uint32_t physicalDimensions =
-            simulationParameters.type == SceneType::SPH_BOX_2D ? 2 : 3;
+            particleSpatialDimensions(simulationParameters.type);
     const uint32_t stride =
-            simulationParameters.type == SceneType::SPH_BOX_2D ? 2 : 4;
+            particleVectorComponents(simulationParameters.type);
 
     std::vector<float> velocities(simulationParameters.numParticles * stride);
     fillHostWithStagingBuffer(simulationState->particleVelocityBuffer, velocities);

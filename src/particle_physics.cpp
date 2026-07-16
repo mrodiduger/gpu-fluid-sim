@@ -1,5 +1,5 @@
 #include "particle_physics.h"
-
+#include "particle_layout.h"
 
 ParticleSimulation::ParticleSimulation(const SimulationParameters &parameters) : simulationParameters(parameters) {
 
@@ -32,19 +32,10 @@ void ParticleSimulation::updateCmd(const SimulationState &simulationState) {
     }
     vk::ArrayProxy<const ParticleSimulationPushConstants> pcr;
     // Set up copy buffers based on dimension
-    vk::DeviceSize velocityBufferSize;
-    switch (simulationState.parameters.type) {
-        case SceneType::SPH_BOX_2D:
-            velocityBufferSize = sizeof(glm::vec2) * simulationState.parameters.numParticles;
-            break;
-        case SceneType::SPH_BOX_3D:
-            velocityBufferSize = sizeof(glm::vec4) * simulationState.parameters.numParticles;
-            break;
-        default:
-            resources.device.freeCommandBuffers(resources.computeCommandPool, cmd);
-            cmd = nullptr;
-            return;
-    }
+    const vk::DeviceSize velocityBufferSize =
+            particleVectorByteSize(
+                    simulationState.parameters.type,
+                    simulationState.parameters.numParticles);
 
     particleVelocityBufferCopy = createDeviceLocalBuffer("buffer-velocity-copy", velocityBufferSize);
     if (cmd == nullptr) {
@@ -97,10 +88,9 @@ void ParticleSimulation::updateCmd(const SimulationState &simulationState) {
     //update positions
     cmd.bindPipeline(vk::PipelineBindPoint::eCompute, positionUpdatePipeline);
     cmd.dispatch(dx, dy, 1);
-    computeBarrier(cmd);
-    size_t vectorSize = (simulationState.parameters.type == SceneType::SPH_BOX_2D) ? sizeof(glm::vec2) : sizeof(glm::vec4);
-    // copy particle coordinates
-    cmd.copyBuffer(particleVelocityBufferCopy.buf, simulationState.particleVelocityBuffer.buf, vk::BufferCopy(0, 0, simulationState.parameters.numParticles * vectorSize));
+    const size_t vectorSize =
+            particleVectorByteSize(simulationState.parameters.type, 1);
+
     cmd.pipelineBarrier(
             vk::PipelineStageFlagBits::eComputeShader,
             vk::PipelineStageFlagBits::eTransfer,
@@ -110,6 +100,15 @@ void ParticleSimulation::updateCmd(const SimulationState &simulationState) {
                     vk::AccessFlagBits::eTransferRead),
             nullptr,
             nullptr);
+
+    // copy particle velocities
+    cmd.copyBuffer(
+            particleVelocityBufferCopy.buf,
+            simulationState.particleVelocityBuffer.buf,
+            vk::BufferCopy(
+                    0,
+                    0,
+                    simulationState.parameters.numParticles * vectorSize));
 
     writeTimestamp(cmd, PhysicsEnd);
     cmd.end();

@@ -1,5 +1,6 @@
 #include "simulation_state.h"
 #include "debug_image.h"
+#include "particle_layout.h"
 #include "render.h"
 #include <cstdint>
 #include <memory>
@@ -106,18 +107,16 @@ SimulationState::SimulationState(const SimulationParameters &_parameters, std::s
     debugImageSort = std::make_unique<DebugImage>("debug-image-sort");
     debugImageRenderer = std::make_unique<DebugImage>("debug-image-render");
 
-    vk::DeviceSize coordinateBufferSize = 0;
+    const vk::DeviceSize coordinateBufferSize =
+            particleVectorByteSize(parameters.type, parameters.numParticles);
     switch (parameters.type) {
         case SceneType::SPH_BOX_2D:
-            coordinateBufferSize = sizeof(glm::vec2) * parameters.numParticles;
-
             camera->position = {0.5, 0.5,
                                 0.5 / glm::tan(camera->fovy / 2.0f)};
             camera->phi = glm::pi<float>();
             camera->theta = 0.0f;
             break;
         case SceneType::SPH_BOX_3D:
-            coordinateBufferSize = sizeof(glm::vec4) * parameters.numParticles;
             camera->reset();
             break;
         default:
@@ -129,7 +128,9 @@ SimulationState::SimulationState(const SimulationParameters &_parameters, std::s
     particleVelocityBuffer = createDeviceLocalBuffer("buffer-velocities", coordinateBufferSize);
     particleDensityBuffer = createDeviceLocalBuffer("buffer-densities", parameters.numParticles * sizeof(float));
     std::vector<float> coordinateValues;
-    std::vector<float> velocityValues(parameters.numParticles, 0.0f);
+    std::vector<float> velocityValues(
+            particleVectorScalarCount(parameters.type, parameters.numParticles),
+            0.0f);
     std::vector<float> densityValues(parameters.numParticles, 0.0f);// initialize densities to 0
 
     switch (parameters.initializationFunction) {

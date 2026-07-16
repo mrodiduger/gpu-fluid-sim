@@ -145,6 +145,15 @@ if (BUILD_TESTING)
             src/simulation_diagnostics.cpp)
     target_include_directories(SimulationDiagnosticsTest PRIVATE include)
     add_test(NAME SimulationDiagnosticsTest COMMAND SimulationDiagnosticsTest)
+
+    add_executable(ParticleLayoutTest tests/particle_layout_test.cpp)
+    target_include_directories(ParticleLayoutTest PRIVATE include)
+    add_test(NAME ParticleLayoutTest COMMAND ParticleLayoutTest)
+
+    add_executable(ParticlePipelineSourceTest tests/particle_pipeline_source_test.cpp)
+    target_compile_definitions(ParticlePipelineSourceTest
+            PRIVATE GPU_FLUID_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    add_test(NAME ParticlePipelineSourceTest COMMAND ParticlePipelineSourceTest)
 endif ()
 
 if (RENDERDOC_PATH)
