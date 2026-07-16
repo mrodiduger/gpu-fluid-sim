@@ -1,0 +1,18 @@
+simulation:
+  type: sph_box_2d
+  initialization_function: jittered
+  num_particles: 4096
+  random_seed: 1
+  gravity: 9.81
+  deltaTime: 0.001
+  spatial_radius: 0.04
+  targetDensity: 8192
+  pressureMultiplier: 200
+  viscosity: 60
+  collisionDampingFactor: 0
+  boundaryThreshold: 0.04
+  boundaryForceStrength: 100
+render:
+  background_field: none
+  particle_color: density
+  particle_radius: 6
