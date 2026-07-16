@@ -159,6 +159,21 @@ if (BUILD_TESTING)
     target_compile_definitions(SphShaderSourceTest
             PRIVATE GPU_FLUID_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     add_test(NAME SphShaderSourceTest COMMAND SphShaderSourceTest)
+
+    set(TEST_TARGETS
+            SwapchainStatusTest
+            VisualScaleTest
+            SimulationDiagnosticsTest
+            ParticleLayoutTest
+            ParticlePipelineSourceTest
+            SphShaderSourceTest)
+    foreach (TEST_TARGET IN LISTS TEST_TARGETS)
+        if (MSVC)
+            target_compile_options(${TEST_TARGET} PRIVATE /UNDEBUG)
+        elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+            target_compile_options(${TEST_TARGET} PRIVATE -UNDEBUG)
+        endif ()
+    endforeach ()
 endif ()
 
 if (RENDERDOC_PATH)
