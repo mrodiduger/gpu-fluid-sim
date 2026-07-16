@@ -31,17 +31,40 @@ int main() {
     assert(countOccurrences(physicsSource, "computeBarrier(cmd)") == 2);
     assert(countOccurrences(physicsSource, "cmd.pipelineBarrier(") == 1);
     assert(countOccurrences(physicsSource, "cmd.copyBuffer(") == 1);
+    assert(countOccurrences(physicsSource, "createDeviceLocalBuffer(") == 1);
 
+    const size_t densityPipeline = physicsSource.find(
+            "cmd.bindPipeline(vk::PipelineBindPoint::eCompute, densityPipeline)");
+    const size_t densityDispatch = physicsSource.find("cmd.dispatch(", densityPipeline);
+    const size_t densityBarrier = physicsSource.find("computeBarrier(cmd)", densityDispatch);
+    const size_t forcePipeline = physicsSource.find(
+            "cmd.bindPipeline(vk::PipelineBindPoint::eCompute, computePipeline)",
+            densityBarrier);
+    const size_t forceDispatch = physicsSource.find("cmd.dispatch(", forcePipeline);
+    const size_t forceBarrier = physicsSource.find("computeBarrier(cmd)", forceDispatch);
     const size_t positionPipeline = physicsSource.find(
-            "cmd.bindPipeline(vk::PipelineBindPoint::eCompute, positionUpdatePipeline)");
+            "cmd.bindPipeline(vk::PipelineBindPoint::eCompute, positionUpdatePipeline)",
+            forceBarrier);
     const size_t positionDispatch = physicsSource.find("cmd.dispatch(", positionPipeline);
     const size_t transferBarrier = physicsSource.find("cmd.pipelineBarrier(", positionDispatch);
     const size_t velocityCopy = physicsSource.find("cmd.copyBuffer(", transferBarrier);
 
+    assert(densityPipeline != std::string::npos);
+    assert(densityDispatch != std::string::npos);
+    assert(densityBarrier != std::string::npos);
+    assert(forcePipeline != std::string::npos);
+    assert(forceDispatch != std::string::npos);
+    assert(forceBarrier != std::string::npos);
     assert(positionPipeline != std::string::npos);
     assert(positionDispatch != std::string::npos);
     assert(transferBarrier != std::string::npos);
     assert(velocityCopy != std::string::npos);
+    assert(densityPipeline < densityDispatch);
+    assert(densityDispatch < densityBarrier);
+    assert(densityBarrier < forcePipeline);
+    assert(forcePipeline < forceDispatch);
+    assert(forceDispatch < forceBarrier);
+    assert(forceBarrier < positionPipeline);
     assert(positionPipeline < positionDispatch);
     assert(positionDispatch < transferBarrier);
     assert(transferBarrier < velocityCopy);
@@ -77,6 +100,24 @@ int main() {
     assert(copyBufferSource != std::string::npos);
     assert(copyBufferDestination != std::string::npos);
     assert(copyBufferSource < copyBufferDestination);
+
+    const size_t runFunction =
+            physicsSource.find("vk::CommandBuffer ParticleSimulation::run");
+    const size_t readbackCommentStart = physicsSource.find("/*", runFunction);
+    const size_t readbackCommentEnd = physicsSource.find("*/", readbackCommentStart);
+    const size_t firstReadback =
+            physicsSource.find("fillHostWithStagingBuffer(");
+    const size_t lastReadback =
+            physicsSource.rfind("fillHostWithStagingBuffer(");
+
+    assert(countOccurrences(physicsSource, "fillHostWithStagingBuffer(") == 3);
+    assert(runFunction != std::string::npos);
+    assert(readbackCommentStart != std::string::npos);
+    assert(readbackCommentEnd != std::string::npos);
+    assert(firstReadback != std::string::npos);
+    assert(lastReadback != std::string::npos);
+    assert(readbackCommentStart < firstReadback);
+    assert(lastReadback < readbackCommentEnd);
 
     const size_t coordinateBufferSize =
             simulationStateSource.find("const vk::DeviceSize coordinateBufferSize");
