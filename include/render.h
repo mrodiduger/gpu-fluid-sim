@@ -4,6 +4,7 @@
 
 #include "camera.h"
 #include "imgui_ui.h"
+#include "mouse_stirring.h"
 #include "task_common.h"
 
 class Simulation;
@@ -23,6 +24,8 @@ public:
     bool wp, ap, sp, dp;
     bool doRawMouseInput;
     bool doingRawMouseInput;
+    MouseStirringTracker mouseStirringTracker;
+    MouseStirringInput mouseStirringInput;
     bool framebufferResized = false;
 
     AppResources &app;
@@ -50,7 +53,7 @@ public:
 
     void preInput();
 
-    void input();
+    void input(const Simulation &simulation);
 
     void renderSimulationFrame(Simulation &simulation);
 

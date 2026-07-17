@@ -9,6 +9,7 @@
 
 #include "debug_image.h"
 #include "imgui_ui.h"
+#include "mouse_stirring.h"
 #include "particle_physics.h"
 #include "particle_renderer.h"
 #include "spatial_lookup.h"
@@ -27,6 +28,10 @@ public:
     void releaseSwapchainResources();
     void resize();
     SimulationState &getState() { return *simulationState; }
+    const SimulationState &getState() const { return *simulationState; }
+    void setMouseStirringInput(const MouseStirringInput &input) {
+        mouseStirringInput = input;
+    }
     const QueryTimes &getQueryTimes() { return queryTimes; }
 
 private:
@@ -40,6 +45,7 @@ private:
     RenderParameters renderParameters;
     SimulationParameters simulationParameters;
     std::unique_ptr<SimulationState> simulationState;
+    MouseStirringInput mouseStirringInput;
 
     std::unique_ptr<ImguiUi> imguiUi;
 

@@ -1,9 +1,12 @@
 #include "render.h"
 
+#include "imgui.h"
 #include "simulation.h"
 #include "swapchain_status.h"
 
 void Render::renderSimulationFrame(Simulation &simulation) {
+    simulation.setMouseStirringInput(mouseStirringInput);
+
     if (framebufferResized) {
         recreateSwapchain(simulation);
         if (glfwWindowShouldClose(app.window))
@@ -45,8 +48,10 @@ void Render::renderSimulationFrame(Simulation &simulation) {
         recreateSwapchain(simulation);
 }
 
-void Render::input() {
-    doRawMouseInput |= glfwGetKey(app.window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS;
+void Render::input(const Simulation &simulation) {
+    const bool shiftPressed =
+            glfwGetKey(app.window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS;
+    doRawMouseInput |= shiftPressed;
     if (doingRawMouseInput != doRawMouseInput) {
         if (doRawMouseInput) {
             glfwSetInputMode(app.window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -59,7 +64,7 @@ void Render::input() {
         }
         doingRawMouseInput = doRawMouseInput;
     }
-    if (glfwGetKey(app.window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
+    if (shiftPressed) {
         // limit camera movement to 20 fps equivalent
         auto moveDistance = std::min(timedelta, 1.0 / 20.0f);
         constexpr float MOUSE_SENSITIVITY = 0.002;
@@ -72,6 +77,33 @@ void Render::input() {
         if (glfwGetKey(app.window, GLFW_KEY_E) == GLFW_PRESS) camera->moveInUpDir(moveDistance);
         if (glfwGetKey(app.window, GLFW_KEY_Q) == GLFW_PRESS) camera->moveInUpDir(-moveDistance);
     }
+    const auto &simulationState = simulation.getState();
+    const bool stirringEnabled = mouseStirringEnabled(
+            simulationState.parameters.type == SceneType::SPH_BOX_2D,
+            simulationState.paused,
+            glfwGetMouseButton(app.window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS,
+            shiftPressed,
+            ImGui::GetIO().WantCaptureMouse);
+
+    std::optional<glm::vec2> cursorPosition;
+    if (stirringEnabled) {
+        double cursorX;
+        double cursorY;
+        int windowWidth;
+        int windowHeight;
+        glfwGetCursorPos(app.window, &cursorX, &cursorY);
+        glfwGetWindowSize(app.window, &windowWidth, &windowHeight);
+        if (windowWidth > 0 && windowHeight > 0) {
+            cursorPosition = cursorToSimulationPlane(
+                    {cursorX, cursorY},
+                    {static_cast<uint32_t>(windowWidth),
+                     static_cast<uint32_t>(windowHeight)},
+                    camera->viewProjectionMatrix());
+        }
+    }
+
+    mouseStirringInput =
+            mouseStirringTracker.update(cursorPosition, stirringEnabled);
     doRawMouseInput = false;
 }
 

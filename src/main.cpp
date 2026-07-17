@@ -39,7 +39,7 @@ void render() {
         // Poll for and process events
         glfwPollEvents();
 
-        render.input();
+        render.input(simulation);
 
         //if (glfwGetKey(resources.window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         //    glfwSetWindowShouldClose(resources.window, 1);
