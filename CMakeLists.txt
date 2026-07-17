@@ -69,6 +69,7 @@ set(SOURCES_IMGUI
 set(SOURCES
         ${SOURCES_IMGUI}
         src/debug_image.cpp
+        src/mouse_stirring.cpp
         src/spatial_lookup.cpp
         src/host_timer.cpp
         src/imgui_ui.cpp
@@ -160,13 +161,20 @@ if (BUILD_TESTING)
             PRIVATE GPU_FLUID_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     add_test(NAME SphShaderSourceTest COMMAND SphShaderSourceTest)
 
+    add_executable(MouseStirringTest
+            tests/mouse_stirring_test.cpp
+            src/mouse_stirring.cpp)
+    target_include_directories(MouseStirringTest PRIVATE include ${GLM_INCLUDE})
+    add_test(NAME MouseStirringTest COMMAND MouseStirringTest)
+
     set(TEST_TARGETS
             SwapchainStatusTest
             VisualScaleTest
             SimulationDiagnosticsTest
             ParticleLayoutTest
             ParticlePipelineSourceTest
-            SphShaderSourceTest)
+            SphShaderSourceTest
+            MouseStirringTest)
     foreach (TEST_TARGET IN LISTS TEST_TARGETS)
         if (MSVC)
             target_compile_options(${TEST_TARGET} PRIVATE /UNDEBUG)
