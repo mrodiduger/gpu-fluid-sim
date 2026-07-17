@@ -86,9 +86,19 @@ void Simulation::run(uint32_t imageIndex, vk::Semaphore waitImageAvailable, vk::
     bool doPhysicsTick = doTick && simulationState->time.frames != 1;
     bool doComputeTick = doPhysicsTick || simulationState->time.frames == 1;
 
+    const MouseStirringInput physicsMouseStirring =
+            simulationParameters.type == SceneType::SPH_BOX_2D &&
+                    !simulationState->paused
+            ? mouseStirringInput
+            : MouseStirringInput {};
+
     std::array<std::tuple<vk::Queue, vk::CommandBuffer>, CMD_COUNT> buffers;
     buffers[0] = {resources.transferQueue, cmdReset};
-    buffers[1] = {resources.computeQueue, doPhysicsTick ? particlePhysics->run(*simulationState) : nullptr};
+    buffers[1] = {
+            resources.computeQueue,
+            doPhysicsTick
+                    ? particlePhysics->run(*simulationState, physicsMouseStirring)
+                    : nullptr};
     buffers[2] = {resources.computeQueue, doComputeTick ? spatialLookup->run(*simulationState) : nullptr};
     buffers[3] = {resources.computeQueue, doComputeTick ? rendererCompute->run(*simulationState, renderParameters) : nullptr};
     buffers[4] = {resources.graphicsQueue, particleRenderer->run(*simulationState, renderParameters)};
@@ -332,7 +342,7 @@ void Simulation::reset() {
     cmdEmpty.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eSimultaneousUse));
     cmdEmpty.end();
 
-    particlePhysics->updateCmd(*simulationState);
+    particlePhysics->updateCmd(*simulationState, MouseStirringInput {});
     rendererCompute->updateCmd(*simulationState, renderParameters);
     spatialLookup->updateCmd(*simulationState);
     prevTime = glfwGetTime();

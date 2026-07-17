@@ -22,7 +22,9 @@ ParticleSimulation::ParticleSimulation(const SimulationParameters &parameters) :
     createShaderPipelines(parameters.type);
 }
 
-void ParticleSimulation::updateCmd(const SimulationState &simulationState) {
+void ParticleSimulation::updateCmd(
+        const SimulationState &simulationState,
+        const MouseStirringInput &mouseStirring) {
     if (currentSceneType != simulationState.parameters.type) {
         // Destroy old pipelines and shader modules
         resources.device.destroyPipeline(computePipeline);
@@ -37,7 +39,12 @@ void ParticleSimulation::updateCmd(const SimulationState &simulationState) {
                     simulationState.parameters.type,
                     simulationState.parameters.numParticles);
 
-    particleVelocityBufferCopy = createDeviceLocalBuffer("buffer-velocity-copy", velocityBufferSize);
+    if (particleVelocityBufferCopy.buf == nullptr ||
+        particleVelocityBufferCopySize != velocityBufferSize) {
+        particleVelocityBufferCopy =
+                createDeviceLocalBuffer("buffer-velocity-copy", velocityBufferSize);
+        particleVelocityBufferCopySize = velocityBufferSize;
+    }
     if (cmd == nullptr) {
         std::cout << "ParticleSimulation command buffer is null, allocating new one" << std::endl;
         vk::CommandBufferAllocateInfo cmdInfo(resources.computeCommandPool, vk::CommandBufferLevel::ePrimary, 1);
@@ -67,6 +74,11 @@ void ParticleSimulation::updateCmd(const SimulationState &simulationState) {
     pushConstants.viscosity = simulationState.parameters.viscosity;
     pushConstants.boundaryThreshold = simulationState.parameters.boundaryThreshold;
     pushConstants.boundaryForceStrength = simulationState.parameters.boundaryForceStrength;
+    pushConstants.mousePositionX = mouseStirring.position.x;
+    pushConstants.mousePositionY = mouseStirring.position.y;
+    pushConstants.mouseDragX = mouseStirring.drag.x;
+    pushConstants.mouseDragY = mouseStirring.drag.y;
+    pushConstants.mouseActive = mouseStirring.active ? 1U : 0U;
 
 
     cmd.begin(vk::CommandBufferBeginInfo());
@@ -115,9 +127,11 @@ void ParticleSimulation::updateCmd(const SimulationState &simulationState) {
     currentPushConstants = pushConstants;
 }
 
-vk::CommandBuffer ParticleSimulation::run(const SimulationState &simulationState) {
-    if (nullptr == cmd || hasStateChanged(simulationState)) {
-        updateCmd(simulationState);
+vk::CommandBuffer ParticleSimulation::run(
+        const SimulationState &simulationState,
+        const MouseStirringInput &mouseStirring) {
+    if (nullptr == cmd || hasStateChanged(simulationState, mouseStirring)) {
+        updateCmd(simulationState, mouseStirring);
     }
 
     /*
@@ -139,7 +153,9 @@ vk::CommandBuffer ParticleSimulation::run(const SimulationState &simulationState
     return cmd;
 }
 
-bool ParticleSimulation::hasStateChanged(const SimulationState &state) {
+bool ParticleSimulation::hasStateChanged(
+        const SimulationState &state,
+        const MouseStirringInput &mouseStirring) {
     if (currentSceneType != state.parameters.type ||
         currentPushConstants.spatialRadius != state.spatialRadius ||
         currentPushConstants.gravity != state.parameters.gravity ||
@@ -147,7 +163,12 @@ bool ParticleSimulation::hasStateChanged(const SimulationState &state) {
         currentPushConstants.numParticles != state.parameters.numParticles ||
         currentPushConstants.collisionDamping != state.parameters.collisionDampingFactor ||
         currentPushConstants.targetDensity != state.parameters.targetDensity ||
-        currentPushConstants.pressureMultiplier != state.parameters.pressureMultiplier) {
+        currentPushConstants.pressureMultiplier != state.parameters.pressureMultiplier ||
+        currentPushConstants.mousePositionX != mouseStirring.position.x ||
+        currentPushConstants.mousePositionY != mouseStirring.position.y ||
+        currentPushConstants.mouseDragX != mouseStirring.drag.x ||
+        currentPushConstants.mouseDragY != mouseStirring.drag.y ||
+        currentPushConstants.mouseActive != (mouseStirring.active ? 1U : 0U)) {
         return true;
     } else {
         return false;

@@ -75,6 +75,18 @@ int main() {
                    "(pressureCoefficient+neighbourPressureCoefficient)*"
                    "direction*kernelDerivative;") !=
            std::string::npos);
+    assert(normalizedParticle.find(
+                   "#ifdefDEF_2DconstfloatmouseForceStrength=1000.0;") !=
+           std::string::npos);
+    assert(normalizedParticle.find(
+                   "floatmouseRadius=2.0*constants.spatialRadius;") !=
+           std::string::npos);
+    assert(normalizedParticle.find(
+                   "floatmouseInfluence=1.0-smoothstep(0.0,mouseRadius,mouseDistance);") !=
+           std::string::npos);
+    assert(normalizedParticle.find(
+                   "velocity+=mouseDrag*mouseForceStrength*mouseInfluence*constants.deltaTime;") !=
+           std::string::npos);
     assert(particle.find("calculateSharedPressure") == std::string::npos);
 
     assert(density.find("#define GRID_BINDING_COORDINATES -1") !=

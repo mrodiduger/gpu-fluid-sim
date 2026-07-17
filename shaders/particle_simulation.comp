@@ -19,6 +19,11 @@ layout(push_constant) uniform PushStruct {
     float viscosity;
     float boundaryThreshold;
     float boundaryForceStrength;
+    float mousePositionX;
+    float mousePositionY;
+    float mouseDragX;
+    float mouseDragY;
+    uint mouseActive;
 }
 constants;
 
@@ -128,6 +133,27 @@ VEC_T calculatePressureAndViscosityAcceleration(
            constants.deltaTime;
 }
 
+#ifdef DEF_2D
+const float mouseForceStrength = 1000.0;
+
+void applyMouseStirring(inout vec2 velocity, vec2 position) {
+    if (constants.mouseActive == 0) return;
+
+    vec2 mousePosition =
+            vec2(constants.mousePositionX, constants.mousePositionY);
+    vec2 mouseDrag = vec2(constants.mouseDragX, constants.mouseDragY);
+    float mouseRadius = 2.0 * constants.spatialRadius;
+    float mouseDistance = length(position - mousePosition);
+    float mouseInfluence =
+            1.0 - smoothstep(0.0, mouseRadius, mouseDistance);
+
+    velocity += mouseDrag *
+                mouseForceStrength *
+                mouseInfluence *
+                constants.deltaTime;
+}
+#endif
+
 void main() {
     uint index = gl_GlobalInvocationID.x;
     if (index >= constants.numParticles) return;
@@ -143,6 +169,7 @@ void main() {
             constants.spatialRadius);
 #ifdef DEF_2D
     velocity += VEC_T(0.0, constants.gravity * constants.deltaTime);
+    applyMouseStirring(velocity, position);
 #endif
 #ifdef DEF_3D
     velocity += VEC_T(0.0, 0.0, -constants.gravity * constants.deltaTime);
