@@ -19,7 +19,7 @@ std::optional<glm::vec2> cursorToSimulationPlane(
         return glm::vec3(point) / point.w;
     };
 
-    const auto nearPoint = unproject(0.0f);
+    const auto nearPoint = unproject(-1.0f);
     const auto farPoint = unproject(1.0f);
     if (!nearPoint || !farPoint) return std::nullopt;
 

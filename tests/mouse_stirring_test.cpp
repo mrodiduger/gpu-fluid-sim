@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cmath>
 #include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/matrix_transform.hpp>
 
 bool approximatelyEqual(float left, float right, float tolerance = 1e-5f) {
     return std::abs(left - right) <= tolerance;
@@ -32,6 +33,37 @@ int main() {
     assertVector(*topRight, {1.0f, 1.0f});
     assert(!cursorToSimulationPlane(
                     {0.0, 0.0}, {0, 100}, viewProjection)
+                    .has_value());
+
+    const glm::mat4 perspective =
+            glm::perspective(glm::radians(60.0f), 1.0f, 0.1f, 10.0f);
+    const glm::vec3 target {0.4f, 0.6f, 0.0f};
+    const glm::mat4 perspectiveViewProjection =
+            perspective * glm::lookAt(
+                                  glm::vec3 {target.x, target.y, 0.15f},
+                                  target,
+                                  glm::vec3 {0.0f, 1.0f, 0.0f});
+    const auto perspectiveCenter = cursorToSimulationPlane(
+            {50.0, 50.0}, {100, 100}, perspectiveViewProjection);
+    assert(perspectiveCenter.has_value());
+    assertVector(*perspectiveCenter, glm::vec2(target));
+
+    const glm::mat4 parallelViewProjection =
+            perspective * glm::lookAt(
+                                  glm::vec3 {0.0f, 0.0f, 0.15f},
+                                  glm::vec3 {1.0f, 0.0f, 0.15f},
+                                  glm::vec3 {0.0f, 0.0f, 1.0f});
+    assert(!cursorToSimulationPlane(
+                    {50.0, 50.0}, {100, 100}, parallelViewProjection)
+                    .has_value());
+
+    const glm::mat4 lookingAwayViewProjection =
+            perspective * glm::lookAt(
+                                  glm::vec3 {target.x, target.y, 0.15f},
+                                  glm::vec3 {target.x, target.y, 1.15f},
+                                  glm::vec3 {0.0f, 1.0f, 0.0f});
+    assert(!cursorToSimulationPlane(
+                    {50.0, 50.0}, {100, 100}, lookingAwayViewProjection)
                     .has_value());
 
     assert(mouseStirringEnabled(true, false, true, false, false));
