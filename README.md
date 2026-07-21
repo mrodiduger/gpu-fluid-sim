@@ -10,9 +10,9 @@ A real-time fluid simulation based on smoothed particle hydrodynamics (SPH), acc
 - Live parameter editing and timing data through Dear ImGui
 - Benchmark scenes for comparing lookup and workgroup configurations
 
-## Screenshot
+## Demo
 
-> **Screenshot placeholder:** Add an application capture at `docs/images/simulation.png`, then replace this note with `![GPU fluid simulation](docs/images/simulation.png)`.
+https://github.com/user-attachments/assets/ba250a50-4419-41a8-906f-b0e052da4bc9
 
 ## Requirements
 
