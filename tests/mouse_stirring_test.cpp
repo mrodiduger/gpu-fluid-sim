@@ -90,4 +90,30 @@ int main() {
     const auto restarted = tracker.update(glm::vec2 {0.8f, 0.8f}, true);
     assert(!restarted.active);
     assertVector(restarted.drag, {0.0f, 0.0f});
+
+    MouseStirringAccumulator accumulator;
+    accumulator.add(MouseStirringInput {
+            {0.30f, 0.40f}, {0.02f, -0.01f}, true});
+    accumulator.add(MouseStirringInput {});
+
+    const auto retained = accumulator.consume();
+    assert(retained.active);
+    assertVector(retained.position, {0.30f, 0.40f});
+    assertVector(retained.drag, {0.02f, -0.01f});
+    assert(!accumulator.consume().active);
+
+    accumulator.add(MouseStirringInput {
+            {0.35f, 0.41f}, {0.05f, 0.01f}, true});
+    accumulator.add(MouseStirringInput {
+            {0.37f, 0.39f}, {0.02f, -0.02f}, true});
+
+    const auto combined = accumulator.consume();
+    assert(combined.active);
+    assertVector(combined.position, {0.37f, 0.39f});
+    assertVector(combined.drag, {0.07f, -0.01f});
+
+    accumulator.add(MouseStirringInput {
+            {0.50f, 0.50f}, {0.10f, 0.0f}, true});
+    accumulator.clear();
+    assert(!accumulator.consume().active);
 }

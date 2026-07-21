@@ -9,6 +9,16 @@ struct MouseStirringInput {
     bool active = false;
 };
 
+class MouseStirringAccumulator {
+public:
+    void add(const MouseStirringInput &input);
+    MouseStirringInput consume();
+    void clear();
+
+private:
+    MouseStirringInput pending;
+};
+
 std::optional<glm::vec2> cursorToSimulationPlane(
         const glm::dvec2 &cursor,
         const glm::uvec2 &windowSize,

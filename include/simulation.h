@@ -30,7 +30,7 @@ public:
     SimulationState &getState() { return *simulationState; }
     const SimulationState &getState() const { return *simulationState; }
     void setMouseStirringInput(const MouseStirringInput &input) {
-        mouseStirringInput = input;
+        mouseStirring.add(input);
     }
     const QueryTimes &getQueryTimes() { return queryTimes; }
 
@@ -45,7 +45,7 @@ private:
     RenderParameters renderParameters;
     SimulationParameters simulationParameters;
     std::unique_ptr<SimulationState> simulationState;
-    MouseStirringInput mouseStirringInput;
+    MouseStirringAccumulator mouseStirring;
 
     std::unique_ptr<ImguiUi> imguiUi;
 

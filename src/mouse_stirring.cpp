@@ -45,6 +45,24 @@ bool mouseStirringEnabled(
            !uiCapturesMouse;
 }
 
+void MouseStirringAccumulator::add(const MouseStirringInput &input) {
+    if (!input.active) return;
+
+    pending.position = input.position;
+    pending.drag += input.drag;
+    pending.active = true;
+}
+
+MouseStirringInput MouseStirringAccumulator::consume() {
+    const MouseStirringInput input = pending;
+    pending = {};
+    return input;
+}
+
+void MouseStirringAccumulator::clear() {
+    pending = {};
+}
+
 MouseStirringInput MouseStirringTracker::update(
         const std::optional<glm::vec2> &position,
         bool enabled) {

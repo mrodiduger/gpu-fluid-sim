@@ -86,11 +86,15 @@ void Simulation::run(uint32_t imageIndex, vk::Semaphore waitImageAvailable, vk::
     bool doPhysicsTick = doTick && simulationState->time.frames != 1;
     bool doComputeTick = doPhysicsTick || simulationState->time.frames == 1;
 
-    const MouseStirringInput physicsMouseStirring =
+    const bool mouseStirringAllowed =
             simulationParameters.type == SceneType::SPH_BOX_2D &&
-                    !simulationState->paused
-            ? mouseStirringInput
-            : MouseStirringInput {};
+            !simulationState->paused;
+    MouseStirringInput physicsMouseStirring;
+    if (!mouseStirringAllowed) {
+        mouseStirring.clear();
+    } else if (doPhysicsTick) {
+        physicsMouseStirring = mouseStirring.consume();
+    }
 
     std::array<std::tuple<vk::Queue, vk::CommandBuffer>, CMD_COUNT> buffers;
     buffers[0] = {resources.transferQueue, cmdReset};
@@ -328,6 +332,7 @@ void Simulation::updateCommandBuffers() {
 }
 
 void Simulation::reset() {
+    mouseStirring.clear();
     std::cout << "Simulation reset" << std::endl;
 
     {
