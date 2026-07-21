@@ -76,7 +76,7 @@ int main() {
                    "direction*kernelDerivative;") !=
            std::string::npos);
     assert(normalizedParticle.find(
-                   "#ifdefDEF_2DconstfloatmouseForceStrength=10000.0;") !=
+                   "#ifdefDEF_2DconstfloatmouseForceStrength=30000.0;") !=
            std::string::npos);
     assert(normalizedParticle.find(
                    "floatmouseRadius=2.0*constants.spatialRadius;") !=

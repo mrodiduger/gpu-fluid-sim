@@ -134,7 +134,7 @@ VEC_T calculatePressureAndViscosityAcceleration(
 }
 
 #ifdef DEF_2D
-const float mouseForceStrength = 10000.0;
+const float mouseForceStrength = 30000.0;
 
 void applyMouseStirring(inout vec2 velocity, vec2 position) {
     if (constants.mouseActive == 0) return;
